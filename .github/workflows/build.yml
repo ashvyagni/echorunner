@@ -1,0 +1,25 @@
+name: Build Releases
+on:
+  push:
+    tags: ['v*']
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install -r requirements.txt pyinstaller
+      - run: pyinstaller build.spec
+      - uses: actions/upload-artifact@v4
+        with: { name: EchoRunner-Windows, path: dist/EchoRunner }
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install -r requirements.txt pyinstaller
+      - run: pyinstaller build_mac.spec
+      - uses: actions/upload-artifact@v4
+        with: { name: EchoRunner-macOS, path: dist/EchoRunner.app }

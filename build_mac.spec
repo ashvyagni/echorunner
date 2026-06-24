@@ -77,3 +77,14 @@ coll = COLLECT(
     upx_exclude=[],
     name='EchoRunner',
 )
+
+app = BUNDLE(
+    coll,
+    name='EchoRunner.app',
+    icon='assets/icon.icns',
+    bundle_identifier='com.ashvyagni.echorunner',
+    info_plist={
+        'NSHighResolutionCapable': 'True',
+        'CFBundleShortVersionString': '2.0.0',
+    },
+)
