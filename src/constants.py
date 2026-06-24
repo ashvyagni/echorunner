@@ -134,9 +134,9 @@ CAMERA_DEADZONE = 0.15     # fraction of half-screen before camera starts moving
 CAMERA_LOOKAHEAD = 40.0    # px the camera leads the player in facing direction
 
 # Screen shake (intensity in px, duration in seconds)
-SHAKE_DEATH = (9.0, 0.35)
-SHAKE_LAND = (1.5, 0.06)
-SHAKE_COMPLETE = (4.0, 0.18)
+SHAKE_DEATH = (5.0, 0.30)
+SHAKE_LAND = (0.6, 0.05)
+SHAKE_COMPLETE = (2.5, 0.18)
 SHAKE_TRAUMA_DECAY = 2.5   # how fast shake trauma fades per second
 
 # Time dilation (visual slow-motion). Physics stays at fixed 60Hz; this scales

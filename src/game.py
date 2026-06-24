@@ -237,7 +237,10 @@ class Game:
             # ---- juice reactions to per-tick player signals ----
             if self.player.just_landed:
                 self.sound.play("land")
-                self.camera.add_shake(C.SHAKE_LAND[0])
+                fall_speed = abs(self.player.land_velocity)  # capture vy just before landing in player.py
+                if fall_speed > 250:  # only shake on a real drop, not a small hop
+                    intensity = min(C.SHAKE_LAND[0] * (fall_speed / 400), C.SHAKE_LAND[0] * 1.5)
+                    self.camera.add_shake(intensity)
                 self.particles.dust_landing(self.player.rect.centerx,
                                             self.player.rect.bottom)
             if self.player.just_jumped:

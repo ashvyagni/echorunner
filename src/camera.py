@@ -31,6 +31,9 @@ class Camera:
         self._trauma: float = 0.0          # 0..1, decays over time
         self._shake_x: float = 0.0
         self._shake_y: float = 0.0
+        self._shake_seed_x = random.uniform(0, 1000)
+        self._shake_seed_y = random.uniform(0, 1000)
+        self._shake_time = 0.0
         self._rng = random.Random(99)
         self._facing: int = 1  # remembered for lookahead continuity
 
@@ -67,13 +70,18 @@ class Camera:
         # ---- clamp to level bounds ----
         self.x = max(0.0, min(self.x, max(0.0, level_width - C.SCREEN_W)))
 
-        # ---- trauma / shake ----
+        # ---- trauma / shake (FIXED: smooth noise, not per-tick random angle) ----
         self._trauma = max(0.0, self._trauma - C.SHAKE_TRAUMA_DECAY * dt)
-        shake = self._trauma ** 2  # squared for non-linear feel
-        ang = self._rng.uniform(0, 2 * math.pi)
-        # up to ~25px offset at full trauma; per-event intensity scales trauma
-        self._shake_x = math.cos(ang) * shake * 25.0
-        self._shake_y = math.sin(ang) * shake * 25.0
+        self._shake_time += dt
+        shake = self._trauma ** 2
+        # Sample smooth noise at two offset "channels" so x/y shake decorrelates
+        # without ever jumping discontinuously between frames.
+        freq = 18.0  # Hz-ish wobble rate — tune between 12-20, NOT 60+
+        nx = math.sin(self._shake_time * freq + self._shake_seed_x)
+        ny = math.sin(self._shake_time * freq * 1.3 + self._shake_seed_y)
+        max_offset = 6.0  # px at full trauma — WAS implicitly 25px, far too strong
+        self._shake_x = nx * shake * max_offset
+        self._shake_y = ny * shake * max_offset
 
     def add_shake(self, intensity: float) -> None:
         """Add a shake event. intensity is px; normalized to trauma (0..1)."""
