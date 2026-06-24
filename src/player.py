@@ -14,7 +14,7 @@ given the same input — that's why we run physics on a fixed timestep.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List
 
 import pygame
@@ -109,7 +109,7 @@ class Player:
 
     # --------------------------------------------------------------- update
     def update(self, dt: float, inp: _InputState, platforms: List[pygame.Rect],
-               moving_deltas: List[tuple[int, int]]) -> None:
+               moving_deltas: List[tuple[float, float]]) -> None:
         """Advance physics by dt seconds.
 
         ``moving_deltas`` is the (dx, dy) of any moving platform the player is
@@ -170,8 +170,8 @@ class Player:
 
         # ----- ride moving platform if standing on one -----
         for dx, dy in moving_deltas:
-            self.rect.x += dx
-            self.rect.y += dy
+            self.rect.x += dx  # type: ignore
+            self.rect.y += dy  # type: ignore
 
         # ----- integrate + collide (resolve X then Y to avoid snags) -----
         self._move_axis(self.vx * dt, 0.0, platforms)
@@ -219,8 +219,8 @@ class Player:
 
     def _move_axis(self, dx: float, dy: float, platforms: List[pygame.Rect]) -> None:
         """Move and resolve collisions along a single axis."""
-        self.rect.x += int(dx) if abs(dx) >= 1 else dx
-        self.rect.y += int(dy) if abs(dy) >= 1 else dy
+        self.rect.x += int(dx) if abs(dx) >= 1 else dx  # type: ignore
+        self.rect.y += int(dy) if abs(dy) >= 1 else dy  # type: ignore
 
         for p in platforms:
             if not self.rect.colliderect(p):

@@ -19,7 +19,6 @@ font problem.
 from __future__ import annotations
 
 import importlib
-from typing import Optional
 
 import logging
 import pygame
@@ -31,7 +30,7 @@ class Font:
     """Unified font handle. ``render`` always returns a pygame.Surface."""
 
     def __init__(self, size: int, bold: bool = False) -> None:
-        self.size = size
+        self.font_size = size
         self.bold = bold
         self._impl, self._backend = _pick_backend(size, bold)
 
@@ -41,7 +40,7 @@ class Font:
         if self._backend == "freetype":
             surf = self._impl.render(text, fgcolor=color)[0]
             return surf
-        return _blocky_render(text, self.size, color)
+        return _blocky_render(text, self.font_size, color)
 
     def size(self, text: str) -> tuple[int, int]:
         if self._backend in ("font", "freetype"):
@@ -49,7 +48,7 @@ class Font:
                 return self._impl.get_rect(text).size  # freetype
             except AttributeError:
                 return self._impl.size(text)           # font
-        return _blocky_size(text, self.size)
+        return _blocky_size(text, self.font_size)
 
 
 # ------------------------------------------------------------------ backend pick

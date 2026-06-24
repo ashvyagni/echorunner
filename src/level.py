@@ -202,19 +202,19 @@ class Level:
 
         # Moving platforms draw on top, distinct color.
         for mp in self.moving_platforms:
-            r = mp.rect.move(-ox, -oy)
+            mp_rect = mp.rect.move(-ox, -oy)
             # Only draw if on-screen.
-            if r.right < 0 or r.left > C.SCREEN_W:
+            if mp_rect.right < 0 or mp_rect.left > C.SCREEN_W:
                 continue
-            if r.bottom < 0 or r.top > C.SCREEN_H:
+            if mp_rect.bottom < 0 or mp_rect.top > C.SCREEN_H:
                 continue
-            surface.fill(C.COLOR_MOVING_PLATFORM, r)
-            surface.fill(C.COLOR_MOVING_PLATFORM_TOP, (r.x, r.y, r.w, 4))
+            surface.fill(C.COLOR_MOVING_PLATFORM, mp_rect)
+            surface.fill(C.COLOR_MOVING_PLATFORM_TOP, (mp_rect.x, mp_rect.y, mp_rect.w, 4))
             # 1px edge detail on moving platforms too
             edge_col = (max(0, C.COLOR_MOVING_PLATFORM[0] - 20),
                         max(0, C.COLOR_MOVING_PLATFORM[1] - 20),
                         max(0, C.COLOR_MOVING_PLATFORM[2] - 20))
-            pygame.draw.rect(surface, edge_col, r, 1)
+            pygame.draw.rect(surface, edge_col, mp_rect, 1)
 
     def _draw_tile_edges(self, surface: pygame.Surface,
                          row: List[int], c: int, r: int,

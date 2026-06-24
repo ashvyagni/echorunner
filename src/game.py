@@ -16,7 +16,6 @@ see always matches the run you made.
 from __future__ import annotations
 
 import math
-import sys
 from enum import Enum, auto
 
 import pygame
@@ -116,6 +115,7 @@ class Game:
     #  Main loop
     # ====================================================================
     def run(self) -> None:
+        """Start the main game loop and play background music."""
         self.sound.start_music()
         running = True
         while running:
@@ -126,12 +126,14 @@ class Game:
         self.sound.stop_music()
 
     def quit(self) -> None:
+        """Cleanly exit the game and terminate Pygame."""
         pygame.quit()
 
     # ====================================================================
     #  Events
     # ====================================================================
     def handle_events(self) -> bool:
+        """Process all Pygame input events. Returns False if the game should exit."""
         self._jump_buffer_event = False
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -169,6 +171,7 @@ class Game:
     #  Update
     # ====================================================================
     def update(self, dt: float) -> None:
+        """Advance the game state based on the current state and time delta."""
         self._level_time += dt
         # Advance time dilation
         self._update_time_dilation(dt)
@@ -231,7 +234,6 @@ class Game:
 
             inp = self.player.capture_input(keys, self._jump_buffer_event, self._jump_held)
             self._jump_buffer_event = False
-            was_grounded = self.player.on_ground
             self.player.update(FIXED_DT, inp, level.platforms(), deltas)
 
             # ---- juice reactions to per-tick player signals ----
@@ -322,8 +324,9 @@ class Game:
 
     def _die(self) -> None:
         self.sound.play("death")
-        self.ghost_mgr.save_ghost(self.player.current_recording, completed=False,
-                                  completion_time=None)
+        if self.ghost_mgr:
+            self.ghost_mgr.save_ghost(self.player.current_recording, completed=False,
+                                      completion_time=None)
         self._total_deaths += 1
         # ---- JUICE ----
         self.player.start_death()
@@ -338,8 +341,9 @@ class Game:
 
     def _complete_level(self) -> None:
         self.sound.play("complete")
-        self.ghost_mgr.save_ghost(self.player.current_recording, completed=True,
-                                  completion_time=self.run_time)
+        if self.ghost_mgr:
+            self.ghost_mgr.save_ghost(self.player.current_recording, completed=True,
+                                      completion_time=self.run_time)
         best = self.save.get_best_time(self.levels[self.current_level_index].id)
         is_new_best = False
         if best is None or self.run_time < best:
@@ -469,6 +473,7 @@ class Game:
     #  Rendering
     # ====================================================================
     def render(self) -> None:
+        """Render the current state to the display surface."""
         if self.state == State.MENU:
             self._render_menu()
         elif self.state == State.LEVEL_SELECT:

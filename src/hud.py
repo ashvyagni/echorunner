@@ -94,7 +94,6 @@ class HUD:
         if ghost_near and ghost_count > 0:
             flash = 0.5 + 0.5 * math.sin(self._warn_flash_t * 10.0)
             warn_alpha = int(180 * flash)
-            warn_color = (*C.COLOR_DANGER, warn_alpha)
             warn_surf = self.font_big.render("⚠ ECHO NEAR", True, C.COLOR_DANGER)
             warn_bg = pygame.Surface(
                 (warn_surf.get_width() + 30, 40), pygame.SRCALPHA)

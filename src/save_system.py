@@ -72,7 +72,6 @@ class SaveSystem:
 
     def clear_ghosts(self, level_id: str) -> None:
         """Wipe all ghost recordings for a level (keeps best_time)."""
-        path = self._ghost_path(level_id)
         best = self.get_best_time(level_id)
         self.save_ghosts(level_id, [], best)
 
