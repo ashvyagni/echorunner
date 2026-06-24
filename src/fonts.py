@@ -21,7 +21,10 @@ from __future__ import annotations
 import importlib
 from typing import Optional
 
+import logging
 import pygame
+
+log = logging.getLogger("echorunner.fonts")
 
 
 class Font:
@@ -56,8 +59,8 @@ def _pick_backend(size: int, bold: bool):
         f = pygame.font
         if f.get_init() or _try_font_init():
             return f.SysFont("arial,helvetica,verdana", size, bold=bold), "font"
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning("pygame.font backend failed: %s", e)
 
     # 2) compiled freetype, imported directly to avoid sysfont circular import
     try:
@@ -67,10 +70,11 @@ def _pick_backend(size: int, bold: bool):
         fnt = ft.Font(None, size)
         fnt.style = ft.STYLE_NORMAL if not bold else ft.STYLE_BOLD
         return fnt, "freetype"
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning("pygame._freetype backend failed: %s", e)
 
-    # 3) last resort
+    log.warning("Both font backends unavailable — using blocky bitmap fallback. "
+                "Check your pygame/SDL2_ttf installation.")
     return None, "blocky"
 
 
@@ -85,9 +89,7 @@ def _try_font_init() -> bool:
 # ------------------------------------------------------------------ blocky fallback
 # A tiny 5x7 bitmap font so text is still legible if every real font backend
 # is unavailable. Built from scratch — no assets required.
-_GLYPHS = {ch: _g for ch, _g in zip(
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 :.!-+/%'",
-    [  # each glyph: 7 rows of 5 bits
+_RAW_ROWS = [  # each glyph: 7 rows of 5 bits
         0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110,  # A
         0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110,  # B
         0b01110, 0b10001, 0b10000, 0b10000, 0b10000, 0b10001, 0b01110,  # C
@@ -133,8 +135,16 @@ _GLYPHS = {ch: _g for ch, _g in zip(
         0b01000, 0b10100, 0b00010, 0b00100, 0b01000, 0b00101, 0b00010,  # +
         0b00100, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00100,  # %
         0b00010, 0b00100, 0b01110, 0b10101, 0b11111, 0b00100, 0b01000,  # '
-    ]
-)}
+]
+_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 :.!-+/%'"
+assert len(_RAW_ROWS) == len(_CHARS) * 7, (
+    f"Glyph table misaligned: {len(_RAW_ROWS)} rows for {len(_CHARS)} chars "
+    f"(expected {len(_CHARS) * 7})"
+)
+_GLYPHS = {
+    ch: _RAW_ROWS[i * 7:(i + 1) * 7]
+    for i, ch in enumerate(_CHARS)
+}
 
 
 def _blocky_size(text: str, size: int) -> tuple[int, int]:
@@ -149,9 +159,9 @@ def _blocky_render(text: str, size: int, color) -> pygame.Surface:
     h = gh * scale
     surf = pygame.Surface((w, h), pygame.SRCALPHA)
     for i, ch in enumerate(text.upper()):
-        glyph = _GLYPHS.get(ch, 0)
+        rows = _GLYPHS.get(ch, [0] * 7)
         for row in range(gh):
-            bits = (glyph >> (gh - 1 - row)) & 0b11111
+            bits = rows[row] & 0b11111
             for col in range(gw):
                 if bits & (1 << (gw - 1 - col)):
                     px = (i * 6 + col) * scale
