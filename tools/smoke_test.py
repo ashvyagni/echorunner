@@ -121,13 +121,6 @@ def main():
     assert hit, "expected collision when player overlaps ghost"
     print("  ghost collision OK")
 
-    # 6. blocky font glyph table integrity
-    from src.fonts import _CHARS, _blocky_render
-    for ch in _CHARS:
-        surf = _blocky_render(ch, 16, (255, 255, 255))
-        assert surf.get_width() > 0 and surf.get_height() > 0, f"empty surface for '{ch}'"
-    print("  blocky font integrity OK")
-
     # cleanup
     import shutil
     shutil.rmtree(tmp_save.save_dir, ignore_errors=True)

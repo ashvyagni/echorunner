@@ -40,6 +40,7 @@ class State(Enum):
     LEVEL_COMPLETE = auto()
     DEAD = auto()
     WIN = auto()
+    SETTINGS = auto()
 
 
 # Fixed simulation step (seconds). 1/60 keeps us locked to the recording rate.
@@ -111,6 +112,10 @@ class Game:
         # Fullscreen toggle
         self._fullscreen = False
 
+        # Settings
+        self._shake_enabled: bool = True
+        self._settings_selection: int = 0
+
     # ====================================================================
     #  Main loop
     # ====================================================================
@@ -162,6 +167,8 @@ class Game:
                 elif self.state == State.WIN:
                     if event.key in (pygame.K_RETURN, pygame.K_ESCAPE, pygame.K_SPACE):
                         self.state = State.MENU
+                elif self.state == State.SETTINGS:
+                    self._settings_keydown(event)
             if event.type == pygame.KEYUP:
                 if event.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w):
                     self._jump_held = False
@@ -177,6 +184,8 @@ class Game:
         self._update_time_dilation(dt)
         # Effective dt for particles and visual systems (slowed by time dilation)
         visual_dt = dt * self._time_scale
+        # Always update the background (star twinkle)
+        self.background.update(dt)
 
         if self.state == State.PLAYING:
             self._update_playing(dt)
@@ -240,7 +249,7 @@ class Game:
             if self.player.just_landed:
                 self.sound.play("land")
                 fall_speed = abs(self.player.land_velocity)  # capture vy just before landing in player.py
-                if fall_speed > 250:  # only shake on a real drop, not a small hop
+                if fall_speed > 250 and self._shake_enabled:  # only shake on a real drop, not a small hop
                     intensity = min(C.SHAKE_LAND[0] * (fall_speed / 400), C.SHAKE_LAND[0] * 1.5)
                     self.camera.add_shake(intensity)
                 self.particles.dust_landing(self.player.rect.centerx,
@@ -274,6 +283,13 @@ class Game:
                                     gx + C.PLAYER_SIZE // 2,
                                     gy + C.PLAYER_SIZE // 2,
                                     g.color)
+                # Ghost despawn audio: play a subtle tone for each ghost that
+                # finished replaying this tick.
+                if self.ghost_mgr.just_finished_count() > 0:
+                    self.sound.play("ghost_despawn")
+                # Near-miss detection: fire whoosh + flash if player grazes a ghost.
+                if self.ghost_mgr.check_near_miss(self.player.rect):
+                    self.sound.play("near_miss")
 
             # ---- collisions / outcomes ----
             if self.ghost_mgr and self.ghost_mgr.check_collision(self.player.rect):
@@ -332,7 +348,8 @@ class Game:
         self.player.start_death()
         self._death_timer = C.DEATH_RESTART_DELAY
         self._death_flash = 1.0
-        self.camera.add_shake(C.SHAKE_DEATH[0])
+        if self._shake_enabled:
+            self.camera.add_shake(C.SHAKE_DEATH[0])
         self.particles.death_burst(self.player.rect.centerx,
                                    self.player.rect.centery)
         self._time_scale = C.TIME_SCALE_DEATH
@@ -397,14 +414,17 @@ class Game:
     # ====================================================================
     def _menu_keydown(self, event) -> bool:
         if event.key in (pygame.K_UP, pygame.K_w):
-            self._menu_selection = (self._menu_selection - 1) % 2
+            self._menu_selection = (self._menu_selection - 1) % 3
             self.sound.play("menu")
         elif event.key in (pygame.K_DOWN, pygame.K_s):
-            self._menu_selection = (self._menu_selection + 1) % 2
+            self._menu_selection = (self._menu_selection + 1) % 3
             self.sound.play("menu")
         elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
             if self._menu_selection == 0:
                 self._start_fade(lambda: setattr(self, 'state', State.LEVEL_SELECT))
+                self.sound.play("menu")
+            elif self._menu_selection == 1:
+                self._start_fade(lambda: setattr(self, 'state', State.SETTINGS))
                 self.sound.play("menu")
             else:
                 return False
@@ -456,6 +476,30 @@ class Game:
             self.sound.toggle_music()
         elif event.key == pygame.K_n:
             self.sound.toggle_sound()
+        elif event.key == pygame.K_s:
+            self._start_fade(lambda: setattr(self, 'state', State.SETTINGS))
+
+    def _settings_keydown(self, event) -> None:
+        """Handle settings screen input."""
+        num_options = 4
+        if event.key in (pygame.K_UP, pygame.K_w):
+            self._settings_selection = (self._settings_selection - 1) % num_options
+            self.sound.play("menu")
+        elif event.key in (pygame.K_DOWN, pygame.K_s):
+            self._settings_selection = (self._settings_selection + 1) % num_options
+            self.sound.play("menu")
+        elif event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_LEFT, pygame.K_RIGHT):
+            self.sound.play("menu")
+            if self._settings_selection == 0:
+                self.sound.toggle_music()
+            elif self._settings_selection == 1:
+                self.sound.toggle_sound()
+            elif self._settings_selection == 2:
+                self._toggle_fullscreen()
+            elif self._settings_selection == 3:
+                self._shake_enabled = not self._shake_enabled
+        elif event.key == pygame.K_ESCAPE:
+            self._start_fade(lambda: setattr(self, 'state', State.MENU))
 
     def _complete_keydown(self, event) -> None:
         if self._complete_timer < 0.3:
@@ -488,6 +532,8 @@ class Game:
                 self._render_complete()
         elif self.state == State.WIN:
             self._render_win()
+        elif self.state == State.SETTINGS:
+            self._render_settings()
         # screen fade overlay (always on top)
         if self._fade_alpha > 1:
             fade_surf = pygame.Surface((C.SCREEN_W, C.SCREEN_H))
@@ -542,13 +588,13 @@ class Game:
                                     C.COLOR_TEXT_DIM)
         self.screen.blit(sub, ((C.SCREEN_W - sub.get_width()) // 2, 260))
 
-        items = ["PLAY", "QUIT"]
+        items = ["PLAY", "SETTINGS", "QUIT"]
         for i, label in enumerate(items):
             sel = (i == self._menu_selection)
             color = C.COLOR_ACCENT if sel else C.COLOR_TEXT
             txt = self.font_btn.render(label, True, color)
             x = (C.SCREEN_W - txt.get_width()) // 2
-            y = 380 + i * 60
+            y = 350 + i * 60
             if sel:
                 # pulsing arrow
                 arrow_pulse = int(3 * math.sin(self._level_time * 5))
@@ -645,6 +691,7 @@ class Game:
             "C        — Clear echoes (this level)",
             "M        — Toggle music",
             "N        — Toggle sound",
+            "S        — Settings",
             "Q        — Quit to menu",
         ]
         for i, ln in enumerate(lines):
@@ -727,3 +774,54 @@ class Game:
         self._fullscreen = not self._fullscreen
         flags = pygame.SCALED | (pygame.FULLSCREEN if self._fullscreen else 0)
         self.screen = pygame.display.set_mode((C.SCREEN_W, C.SCREEN_H), flags, vsync=1)
+
+    def _render_settings(self) -> None:
+        """Settings screen: music, sound, fullscreen, screen-shake toggles."""
+        self.background.draw(self.screen, 0)
+        title = self.font_h1.render("SETTINGS", True, C.COLOR_TEXT)
+        self.screen.blit(title, ((C.SCREEN_W - title.get_width()) // 2, 80))
+
+        options = [
+            ("Music",        self.sound.music_enabled),
+            ("Sound FX",     self.sound.enabled),
+            ("Fullscreen",   self._fullscreen),
+            ("Screen Shake", self._shake_enabled),
+        ]
+        start_y = 200
+        for i, (label, value) in enumerate(options):
+            sel = (i == self._settings_selection)
+            row_color = C.COLOR_ACCENT if sel else C.COLOR_TEXT
+            val_str = "ON" if value else "OFF"
+            val_color = (120, 230, 120) if value else (200, 80, 80)
+
+            # Row background
+            row_w, row_h = 500, 52
+            rx = (C.SCREEN_W - row_w) // 2
+            ry = start_y + i * (row_h + 12)
+            bg = pygame.Surface((row_w, row_h), pygame.SRCALPHA)
+            bg.fill((*C.COLOR_PANEL, 180))
+            if sel:
+                pygame.draw.rect(bg, (*C.COLOR_ACCENT, 40), (0, 0, row_w, row_h), border_radius=8)
+            surface = self.screen
+            surface.blit(bg, (rx, ry))
+            border_c = C.COLOR_ACCENT if sel else (50, 50, 80)
+            pygame.draw.rect(surface, border_c, (rx, ry, row_w, row_h), 2, border_radius=8)
+
+            lbl = self.font_btn.render(label, True, row_color)
+            surface.blit(lbl, (rx + 24, ry + (row_h - lbl.get_height()) // 2))
+            val_surf = self.font_btn.render(val_str, True, val_color)
+            surface.blit(val_surf, (rx + row_w - val_surf.get_width() - 24,
+                                    ry + (row_h - val_surf.get_height()) // 2))
+            if sel:
+                arrow_x = rx - 28
+                arrow_y = ry + row_h // 2
+                ap = int(3 * math.sin(self._level_time * 5))
+                pygame.draw.polygon(surface, C.COLOR_ACCENT,
+                                    [(arrow_x + ap, arrow_y - 8),
+                                     (arrow_x + 14, arrow_y),
+                                     (arrow_x + ap, arrow_y + 8)])
+
+        hint = self.font_small.render(
+            "Up/Down: navigate   Enter/Space: toggle   Esc: back",
+            True, C.COLOR_TEXT_DIM)
+        self.screen.blit(hint, ((C.SCREEN_W - hint.get_width()) // 2, C.SCREEN_H - 40))

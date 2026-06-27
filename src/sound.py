@@ -55,7 +55,8 @@ class SoundManager:
         ----------
         name : str
             Sound key ("jump", "land", "death", "complete", "menu",
-            "unlock", "bonk", "footstep", "ghost_hum").
+            "unlock", "bonk", "footstep", "ghost_hum", "near_miss",
+            "ghost_despawn").
         pitch_var : float
             If > 0, randomly resample the sound by ±pitch_var semitones for
             variation.  Used on "jump" (±10%) and "footstep" (±15%) to avoid
@@ -175,6 +176,10 @@ class SoundManager:
         self.sounds["footstep"] = self._wave(self._click(0.04, sr), 0.15)
         # Ghost proximity hum: low eerie drone
         self.sounds["ghost_hum"] = self._wave(self._drone(0.6, sr), 0.12)
+        # Near-miss whoosh: short airy sweep when player grazes a ghost
+        self.sounds["near_miss"] = self._wave(self._whoosh(0.18, sr), 0.28)
+        # Ghost despawn: soft fade-out tone when a ghost finishes its replay
+        self.sounds["ghost_despawn"] = self._wave(self._despawn(0.25, sr), 0.15)
 
     def _blip(self, f0: float, f1: float, dur: float, sr: int) -> list[float]:
         """A short frequency sweep — good for a jump sound."""
@@ -256,6 +261,33 @@ class SoundManager:
             # Two slightly detuned low sines create a beating/uneasy feel
             out.append(env * (math.sin(2 * math.pi * 55 * t)
                               + math.sin(2 * math.pi * 57.5 * t)))
+        return out
+
+    def _whoosh(self, dur: float, sr: int) -> list[float]:
+        """Short airy sweep — near-miss sound when player grazes a ghost."""
+        n = int(dur * sr)
+        out = []
+        for i in range(n):
+            t = i / sr
+            # Envelope: rise then fall
+            env = math.sin(math.pi * t / dur) * math.exp(-3.0 * t)
+            # White noise + high-freq tone sweep
+            noise = random.uniform(-1, 1) * 0.6
+            freq = 800 + 600 * (i / n)
+            tone = math.sin(2 * math.pi * freq * t) * 0.4
+            out.append(env * (noise + tone))
+        return out
+
+    def _despawn(self, dur: float, sr: int) -> list[float]:
+        """Soft fading tone — ghost finished its replay and despawned."""
+        n = int(dur * sr)
+        out = []
+        for i in range(n):
+            t = i / sr
+            env = math.exp(-8.0 * t)  # fast decay — subtle, not distracting
+            # Slightly detuned twin tones for an ethereal, vanishing feel
+            out.append(env * (math.sin(2 * math.pi * 420 * t) * 0.5
+                              + math.sin(2 * math.pi * 418 * t) * 0.3))
         return out
 
     def _build_music(self) -> Optional[pygame.mixer.Sound]:
