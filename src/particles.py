@@ -194,3 +194,31 @@ class ParticleSystem:
             size=self._rng.uniform(1, 2),
             color=color, gravity=120, drag=0.2,
         )
+
+    def jump_pad_bounce(self, x: float, y: float) -> None:
+        """Upward burst of golden particles when bouncing off a jump pad."""
+        for _ in range(14):
+            ang = self._rng.uniform(0.8 * math.pi, 1.2 * math.pi)  # mostly upward
+            spd = self._rng.uniform(80, 220)
+            self._spawn(
+                x=x + self._rng.uniform(-8, 8), y=y,
+                vx=math.cos(ang) * spd, vy=math.sin(ang) * spd * 0.7,
+                life=self._rng.uniform(0.3, 0.6),
+                size=self._rng.uniform(2, 5),
+                color=self._rng.choice([(255, 220, 80), (255, 180, 40), (255, 255, 180)]),
+                gravity=300, drag=0.15,
+            )
+
+    def ambient_dust(self, cam_x: float, cam_y: float, level_width: int, level_height: int) -> None:
+        """Spawn occasional floating dust motes for atmosphere."""
+        if self._rng.random() > 0.15:  # only spawn ~15% of calls
+            return
+        x = cam_x + self._rng.uniform(0, C.SCREEN_W)
+        y = cam_y + self._rng.uniform(0, C.SCREEN_H)
+        self._spawn(
+            x=x, y=y,
+            vx=self._rng.uniform(-8, 8), vy=self._rng.uniform(-12, -3),
+            life=self._rng.uniform(1.5, 3.0),
+            size=self._rng.uniform(1, 2),
+            color=(80, 80, 110), gravity=-5, drag=0.98,
+        )

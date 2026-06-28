@@ -180,6 +180,8 @@ class SoundManager:
         self.sounds["near_miss"] = self._wave(self._whoosh(0.18, sr), 0.28)
         # Ghost despawn: soft fade-out tone when a ghost finishes its replay
         self.sounds["ghost_despawn"] = self._wave(self._despawn(0.25, sr), 0.15)
+        # Jump pad: bouncy springy boing sound
+        self.sounds["jump_pad"] = self._wave(self._boing(0.18, sr), 0.45)
 
     def _blip(self, f0: float, f1: float, dur: float, sr: int) -> list[float]:
         """A short frequency sweep — good for a jump sound."""
@@ -288,6 +290,19 @@ class SoundManager:
             # Slightly detuned twin tones for an ethereal, vanishing feel
             out.append(env * (math.sin(2 * math.pi * 420 * t) * 0.5
                               + math.sin(2 * math.pi * 418 * t) * 0.3))
+        return out
+
+    def _boing(self, dur: float, sr: int) -> list[float]:
+        """Bouncy springy sound for jump pads — rapid upward frequency sweep."""
+        n = int(dur * sr)
+        out = []
+        for i in range(n):
+            t = i / sr
+            # Quick upward sweep then settle
+            f = 300 + 900 * (i / n) * math.exp(-3.0 * t)
+            env = math.exp(-4.0 * t)
+            out.append(env * (math.sin(2 * math.pi * f * t) * 0.7
+                              + math.sin(2 * math.pi * f * 1.5 * t) * 0.3))
         return out
 
     def _build_music(self) -> Optional[pygame.mixer.Sound]:

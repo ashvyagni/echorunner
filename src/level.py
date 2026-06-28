@@ -98,6 +98,7 @@ class Level:
     _platform_rects: List[pygame.Rect] = field(default_factory=list)
     _exit_rect: pygame.Rect = field(default_factory=get_zero_rect)
     _hazard_rects: List[pygame.Rect] = field(default_factory=list)
+    _jump_pad_rects: List[pygame.Rect] = field(default_factory=list)
     _exit_world_pos: tuple[int, int] = (0, 0)
 
     # ------------------------------------------------------------------ build
@@ -110,6 +111,7 @@ class Level:
 
         self._platform_rects.clear()
         self._hazard_rects.clear()
+        self._jump_pad_rects.clear()
         for r, row in enumerate(self.tilemap):
             for c, tile in enumerate(row):
                 x, y = c * C.TILE_SIZE, r * C.TILE_SIZE
@@ -120,17 +122,30 @@ class Level:
                     self._exit_world_pos = (x, y)
                 elif tile == C.TILE_HAZARD:
                     self._hazard_rects.append(pygame.Rect(x, y, C.TILE_SIZE, C.TILE_SIZE))
+                elif tile == C.TILE_JUMP_PAD:
+                    self._jump_pad_rects.append(pygame.Rect(x, y, C.TILE_SIZE, C.TILE_SIZE))
 
     # ----------------------------------------------------------------- access
     def platforms(self) -> List[pygame.Rect]:
-        """All solid platforms (static + current positions of moving ones)."""
-        return self._platform_rects + [mp.rect for mp in self.moving_platforms]
+        """All solid platforms (static + moving + jump pads)."""
+        return self._platform_rects + [mp.rect for mp in self.moving_platforms] + self._jump_pad_rects
 
     def hazards(self) -> List[pygame.Rect]:
         return self._hazard_rects
 
+    def jump_pads(self) -> List[pygame.Rect]:
+        return self._jump_pad_rects
+
     def exit_rect(self) -> pygame.Rect:
         return self._exit_rect
+
+    def tile_at_px(self, px: int, py: int) -> int:
+        """Return tile ID at the given pixel position."""
+        c = px // C.TILE_SIZE
+        r = py // C.TILE_SIZE
+        if 0 <= r < len(self.tilemap) and 0 <= c < len(self.tilemap[r]):
+            return self.tilemap[r][c]
+        return C.TILE_EMPTY
 
     def spawn_pos(self) -> tuple[int, int]:
         """Spawn in pixels, centered on the tile, player-sized."""
@@ -199,6 +214,9 @@ class Level:
 
                 elif tile == C.TILE_HAZARD:
                     _draw_hazard(surface, x, y, t)
+
+                elif tile == C.TILE_JUMP_PAD:
+                    _draw_jump_pad(surface, x, y, t)
 
         # Moving platforms draw on top, distinct color.
         for mp in self.moving_platforms:
@@ -271,6 +289,45 @@ def _draw_hazard(surface: pygame.Surface, x: int, y: int, t: float) -> None:
                  min(255, C.COLOR_HAZARD[2] + int(10 * glow_pulse)))
     for tri in pts:
         pygame.draw.polygon(surface, spike_col, tri)
+
+
+def _draw_jump_pad(surface: pygame.Surface, x: int, y: int, t: float) -> None:
+    """A bouncy pad with animated spring coils and pulsing glow."""
+    pulse = 0.6 + 0.4 * math.sin(t * 6.0)
+
+    # Base plate (darker)
+    base_col = (int(180 * pulse), int(140 * pulse), 30)
+    surface.fill(base_col, (x + 2, y + C.TILE_SIZE - 10, C.TILE_SIZE - 4, 10))
+
+    # Spring coils (zigzag lines)
+    spring_col = (int(255 * pulse), int(200 * pulse), int(60 * pulse))
+    mid_x = x + C.TILE_SIZE // 2
+    coil_top = y + 6
+    coil_bot = y + C.TILE_SIZE - 10
+    coil_w = 8
+    segments = 4
+    seg_h = (coil_bot - coil_top) // segments
+    for i in range(segments):
+        sy1 = coil_top + i * seg_h
+        sy2 = sy1 + seg_h
+        if i % 2 == 0:
+            pts = [(mid_x - coil_w, sy1), (mid_x + coil_w, sy2)]
+        else:
+            pts = [(mid_x + coil_w, sy1), (mid_x - coil_w, sy2)]
+        pygame.draw.line(surface, spring_col, pts[0], pts[1], 3)
+
+    # Top pad (glowing)
+    top_col = (min(255, C.COLOR_JUMP_PAD[0] + int(40 * pulse)),
+               min(255, C.COLOR_JUMP_PAD[1] + int(30 * pulse)),
+               C.COLOR_JUMP_PAD[2])
+    surface.fill(top_col, (x + 4, y + 2, C.TILE_SIZE - 8, 6))
+
+    # Glow underneath
+    glow_surf = pygame.Surface((C.TILE_SIZE, 8), pygame.SRCALPHA)
+    glow_a = int(50 + 30 * pulse)
+    pygame.draw.ellipse(glow_surf, (*C.COLOR_JUMP_PAD, glow_a),
+                        (0, 0, C.TILE_SIZE, 8))
+    surface.blit(glow_surf, (x, y - 2))
 
 
 # --------------------------------------------------------------------- loader

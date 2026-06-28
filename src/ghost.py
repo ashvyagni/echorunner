@@ -24,7 +24,6 @@ enabling the Game class to fire a distinct audio + visual cue.
 
 from __future__ import annotations
 
-import math
 from typing import List
 
 import pygame
@@ -232,8 +231,14 @@ class GhostManager:
         self._near_miss_cooldown: dict[int, float] = {}  # ghost id → cooldown
 
     # ------------------------------------------------------------ load / save
-    def load(self) -> None:
-        self._raw = self.save.load_ghosts(self.level_id)
+    def load(self, completed_only: bool = True) -> None:
+        raw = self.save.load_ghosts(self.level_id)
+        if completed_only:
+            # Load only completed (successful) ghosts for replay
+            self._raw = [r for r in raw if r.get("completed", False)]
+        else:
+            # Load all ghosts (including death ghosts)
+            self._raw = raw
 
     def save_ghost(self, frames: List[dict], completed: bool,
                    completion_time: float | None) -> None:

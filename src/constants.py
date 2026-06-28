@@ -76,6 +76,9 @@ GHOST_TRAIL_LEN = 4      # number of trailing copies
 GHOST_TRAIL_EVERY = 4    # leave a trail copy every N frames
 # Forgiveness: shrink the ghost hitbox a little so near-misses feel fair.
 GHOST_HITBOX_SHRINK = 6
+# Grace period at run start where ghost collision is disabled (seconds).
+# Prevents instant death from ghosts replaying on top of the spawn point.
+GHOST_GRACE_PERIOD = 1.5
 
 # Each ghost cycles through this palette for visual variety.
 GHOST_COLORS = [
@@ -98,6 +101,8 @@ COLOR_HAZARD = (220, 70, 90)
 COLOR_EXIT = (78, 205, 196)
 COLOR_MOVING_PLATFORM = (110, 90, 160)
 COLOR_MOVING_PLATFORM_TOP = (150, 130, 200)
+COLOR_JUMP_PAD = (255, 200, 60)
+COLOR_JUMP_PAD_SPRING = (220, 170, 40)
 COLOR_TEXT = (235, 235, 245)
 COLOR_TEXT_DIM = (150, 150, 170)
 COLOR_ACCENT = (120, 230, 255)
@@ -108,7 +113,12 @@ COLOR_PANEL = (24, 24, 48)
 TILE_EMPTY = 0
 TILE_PLATFORM = 1
 TILE_EXIT = 2
-TILE_HAZARD = 3  # instant death (spikes) — extends the tilemap spec
+TILE_HAZARD = 3  # instant death (spikes)
+TILE_JUMP_PAD = 4  # launches the player high into the air
+
+# Jump pad physics
+JUMP_PAD_FORCE = -850  # upward velocity on bounce (vs -550 for normal jump)
+JUMP_PAD_MIN_VY = -200  # only trigger if player is falling or moving slowly up
 
 # ---------------------------------------------------------------------------
 # Timing
@@ -129,8 +139,8 @@ MASTER_VOLUME = 0.6
 # Juice / game-feel tuning
 # ---------------------------------------------------------------------------
 # Camera
-CAMERA_LERP = 6.0          # higher = snappier follow (per second)
-CAMERA_DEADZONE = 0.15     # fraction of half-screen before camera starts moving
+CAMERA_LERP = 10.0         # higher = snappier follow (per second)
+CAMERA_DEADZONE = 0.08     # fraction of half-screen before camera starts moving
 CAMERA_LOOKAHEAD = 40.0    # px the camera leads the player in facing direction
 
 # Screen shake (intensity in px, duration in seconds)

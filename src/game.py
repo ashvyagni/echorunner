@@ -91,6 +91,8 @@ class Game:
         self._death_flash: float = 0.0
         self._total_deaths: int = 0  # deaths on current level
         self._ghost_hum_playing: bool = False  # track proximity hum state
+        # Prevent accumulating ghosts between runs (deaths accumulate ghosts)
+        self._ghost_manager_initialized: bool = False
 
         # Time dilation (visual slow-mo; physics stays at fixed 60Hz)
         self._time_scale: float = 1.0
@@ -190,11 +192,16 @@ class Game:
         if self.state == State.PLAYING:
             self._update_playing(dt)
             self.particles.update(visual_dt)
+            self.particles.ambient_dust(
+                self.camera.render_x, self.camera.render_y,
+                self.levels[self.current_level_index].width_px,
+                self.levels[self.current_level_index].height_px)
             self.camera.update(
                 self.player.rect.centerx, self.player.rect.centery,
                 self.levels[self.current_level_index].width_px,
                 self.levels[self.current_level_index].height_px,
                 dt, self.player.facing,
+                player_vx=self.player.vx, player_vy=self.player.vy,
             )
         elif self.state == State.DEAD:
             self._death_timer -= dt
@@ -208,6 +215,7 @@ class Game:
                     self.levels[self.current_level_index].width_px,
                     self.levels[self.current_level_index].height_px,
                     dt, self.player.facing,
+                    player_vx=self.player.vx, player_vy=self.player.vy,
                 )
             if self._death_timer <= 0:
                 self._start_run(self.current_level_index)
@@ -248,12 +256,24 @@ class Game:
             # ---- juice reactions to per-tick player signals ----
             if self.player.just_landed:
                 self.sound.play("land")
-                fall_speed = abs(self.player.land_velocity)  # capture vy just before landing in player.py
-                if fall_speed > 250 and self._shake_enabled:  # only shake on a real drop, not a small hop
+                fall_speed = abs(self.player.land_velocity)
+                if fall_speed > 250 and self._shake_enabled:
                     intensity = min(C.SHAKE_LAND[0] * (fall_speed / 400), C.SHAKE_LAND[0] * 1.5)
                     self.camera.add_shake(intensity)
                 self.particles.dust_landing(self.player.rect.centerx,
                                             self.player.rect.bottom)
+                # Check if landed on a jump pad
+                foot_x = self.player.rect.centerx
+                foot_y = self.player.rect.bottom
+                tile_below = level.tile_at_px(foot_x, foot_y + 1)
+                if tile_below == C.TILE_JUMP_PAD:
+                    self.player.vy = C.JUMP_PAD_FORCE
+                    self.player.on_ground = False
+                    self.player._jump_consumed = True
+                    self.sound.play("jump_pad", pitch_var=1.5)
+                    self.particles.jump_pad_bounce(foot_x, foot_y)
+                    if self._shake_enabled:
+                        self.camera.add_shake(1.5)
             if self.player.just_jumped:
                 self.sound.play("jump", pitch_var=2.0)  # ±2 semitones variation
                 self.particles.dust_jump(self.player.rect.centerx,
@@ -288,18 +308,26 @@ class Game:
                 if self.ghost_mgr.just_finished_count() > 0:
                     self.sound.play("ghost_despawn")
                 # Near-miss detection: fire whoosh + flash if player grazes a ghost.
-                if self.ghost_mgr.check_near_miss(self.player.rect):
-                    self.sound.play("near_miss")
+                if self.run_time >= C.GHOST_GRACE_PERIOD:
+                    if self.ghost_mgr.check_near_miss(self.player.rect):
+                        self.sound.play("near_miss")
 
             # ---- collisions / outcomes ----
-            if self.ghost_mgr and self.ghost_mgr.check_collision(self.player.rect):
-                self._die()
-                return
+            # Ghost collision is disabled during the grace period at run start
+            # to prevent instant death from ghosts replaying on the spawn point.
+            if self.ghost_mgr and self.run_time >= C.GHOST_GRACE_PERIOD:
+                if self.ghost_mgr.check_collision(self.player.rect):
+                    self._die()
+                    return
             for hz in level.hazards():
                 if self.player.rect.colliderect(hz):
                     self._die()
                     return
-            if self.player.rect.colliderect(level.exit_rect()):
+            # Generous exit check: inflate vertically so the player triggers
+            # the exit even when standing on the platform row at the exit tile
+            # (where player.bottom == exit.top and colliderect would miss).
+            exit_check = level.exit_rect().inflate(0, C.PLAYER_SIZE * 2)
+            if self.player.rect.colliderect(exit_check):
                 self._complete_level()
                 return
             if self.player.rect.top > level.height_px + 200:
@@ -331,18 +359,19 @@ class Game:
         self._jump_held = False
         self._jump_buffer_event = False
         self.particles.clear()
+        
+        # Create fresh ghost manager for each run
+        # Load only completed ghosts (successful runs) for replay, NOT death ghosts
         self.ghost_mgr = GhostManager(self.save, level.id)
-        self.ghost_mgr.load()
+        self.ghost_mgr.load(completed_only=True)
         self.ghost_mgr.start_replay()
+        
         self.state = State.PLAYING
         if self.sound.music_enabled:
             self.sound.start_music()
 
     def _die(self) -> None:
         self.sound.play("death")
-        if self.ghost_mgr:
-            self.ghost_mgr.save_ghost(self.player.current_recording, completed=False,
-                                      completion_time=None)
         self._total_deaths += 1
         # ---- JUICE ----
         self.player.start_death()
@@ -570,6 +599,8 @@ class Game:
                       fps=self.clock.get_fps(),
                       deaths=self._total_deaths,
                       ghost_near=ghost_near)
+        # Subtle vignette overlay for depth
+        self._draw_vignette()
 
     def _render_menu(self) -> None:
         self.background.draw(self.screen, 0)
@@ -769,6 +800,27 @@ class Game:
     def _fmt(seconds: float | None) -> str:
         from .hud import format_time
         return format_time(seconds)
+
+    def _draw_vignette(self) -> None:
+        """Draw a subtle dark vignette around the screen edges for depth."""
+        vig = pygame.Surface((C.SCREEN_W, C.SCREEN_H), pygame.SRCALPHA)
+        # Top edge
+        for i in range(40):
+            a = int(30 * (1.0 - i / 40))
+            pygame.draw.line(vig, (0, 0, 0, a), (0, i), (C.SCREEN_W, i))
+        # Bottom edge
+        for i in range(40):
+            a = int(30 * (1.0 - i / 40))
+            pygame.draw.line(vig, (0, 0, 0, a), (0, C.SCREEN_H - 1 - i), (C.SCREEN_W, C.SCREEN_H - 1 - i))
+        # Left edge
+        for i in range(30):
+            a = int(20 * (1.0 - i / 30))
+            pygame.draw.line(vig, (0, 0, 0, a), (i, 0), (i, C.SCREEN_H))
+        # Right edge
+        for i in range(30):
+            a = int(20 * (1.0 - i / 30))
+            pygame.draw.line(vig, (0, 0, 0, a), (C.SCREEN_W - 1 - i, 0), (C.SCREEN_W - 1 - i, C.SCREEN_H))
+        self.screen.blit(vig, (0, 0))
 
     def _toggle_fullscreen(self) -> None:
         self._fullscreen = not self._fullscreen

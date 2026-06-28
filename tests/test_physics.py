@@ -1,3 +1,4 @@
+from src import constants as C
 from src.level import load_all_levels
 from src.player import Player, _InputState
 from src.ghost import GhostManager
@@ -16,7 +17,7 @@ def test_physics_smoke(temp_save_system):
         gm = GhostManager(temp_save_system, level.id)
         gm.load()
         gm.start_replay()
-        max_ticks = 60 * 45  # 45s budget
+        max_ticks = 60 * 120  # 120s budget (larger levels need more time)
         ticks = 0
         result = "timeout"
         for _ in range(max_ticks):
@@ -38,7 +39,9 @@ def test_physics_smoke(temp_save_system):
                     break
             if result != "timeout":
                 break
-            if player.rect.colliderect(level.exit_rect()):
+            # Generous exit check matching game.py
+            exit_check = level.exit_rect().inflate(0, C.PLAYER_SIZE * 2)
+            if player.rect.colliderect(exit_check):
                 result = "complete"
                 break
             if player.rect.top > level.height_px + 200:
