@@ -9,7 +9,7 @@ Built in **Python / Pygame** with **zero external asset files** — all sprites 
 
 ---
 
-## Download
+## Download ( doesnt work yet btw :> working on this )
 
 | Platform | Link |
 |----------|------|
